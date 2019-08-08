@@ -3,6 +3,7 @@ let PDFParser = require("pdf2json");
 const chokidar = require('chokidar');
 const querystring = require('querystring');
 const handlebars = require('handlebars');
+const moment = require('moment');
 
 //'C:\Users\cody.jewell\AppData\Local\Temp'
 //'C:/Users/CODY~1.JEW/AppData/Local/Temp/'
@@ -78,7 +79,7 @@ function pdfFinal(directory) {
         rawText.forEach((element, index) => {
             let keys = Object.keys(element)
             stringKeys.push(keys[0])
-            if (keys.includes('CS')) {
+            if (keys.includes('CS') || keys.includes('LB') || keys.includes('PC')) {
                 CSIndexLocationList.push(index);
             }
 
@@ -94,10 +95,14 @@ function pdfFinal(directory) {
             let tempArray = stringKeys.slice(value - 2);
             let itemNo = tempArray.find(findItemNo);
             let entry = {};
-            let ordered = tempArray[0];
-            let shipped = tempArray[1];
+            let ordered = Number.parseInt(tempArray[0].trim());
+            let shipped = Number.parseInt(tempArray[1].trim());
             let itemDesc = tempArray.find(findItemDesc);
+
+            // CHANGE invoiceNumber to 2 for production, use 1 for development.
+            // Using 2 for production means we get the actual invoice number, using 1 in production means that we WON'T get the actual invoice number, just the word "INVOICE" as there are different elements in the array depending on if we use the "DRAFT" version or we monitor the "FINAL" version for errors.
             let invoiceNumber = stringKeys[2];
+
             let pageNumber = tempArray.find(findPageNumber)
 
             entry.itemNumber = itemNo;
@@ -133,9 +138,24 @@ function pdfFinal(directory) {
 
         let errorsOnly = entries.filter(findErrors);
         console.log('Invoice #' + invoice + ' contains ' + errorsOnly.length + ' errors!')
+        errorsOnly.forEach((element, index) => {
+            //console.log(element)
+            console.log('\tError #' + (index + 1) + ': ');
+            console.log(element)
+            console.log('\n')
+        })
+
         //console.log(errorsOnly)
 
-        let source = "<ul>{{#each errors}}<li><a href={{this.link}}>{{this.link}}</a></li>{{/each}}</ul>"
+
+        let source = `<ul>
+                {{#each errors}}
+                    <li>
+                        <p>Error #{{@index}}</p>
+                        <a href={{this.link}}>{{this.link}}</a>
+                    </li>
+                {{/each}}
+            </ul>`;
         //import source from './html/htmlFile.html'
         //let compiled = Handlebars.precompile(template)
         let template = handlebars.compile(source);
@@ -144,16 +164,15 @@ function pdfFinal(directory) {
         };
         let html = template(context);
 
-        let dir = "./" + route;
+        let dir = "./" + route + "_" + moment().format("MM-DD-YYYY");
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir);
         }
 
-        fs.writeFileSync("./" + route + '/' + invoice + ".html", html)
-        fs.writeFileSync("./" + route + '/' + invoice + ".json",
+        fs.writeFileSync(dir + '/' + invoice + ".html", html)
+        fs.writeFileSync(dir + '/' + invoice + ".json",
             JSON.stringify(errorsOnly));
         //fs.openSync("./" + route + '/' + invoice + ".html")
-
     })
 }
 
